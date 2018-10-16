@@ -38,3 +38,6 @@ cmake-build-debug/CMakeFiles/proj2.dir/flags.make
 cmake-build-debug/CMakeFiles/proj2.dir/link.txt
 cmake-build-debug/CMakeFiles/proj2.dir/main.c.o
 cmake-build-debug/CMakeFiles/proj2.dir/progress.make
+.idea/misc.xml
+.idea/vcs.xml
+cmake-build-debug/CMakeFiles/proj2.dir/trafficsim.c.o
