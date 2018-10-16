@@ -33,6 +33,9 @@
 #include <linux/task_io_accounting_ops.h>
 #include <linux/seccomp.h>
 #include <linux/cpu.h>
+#include <include/linux/spinlock_types.h> //added for cs1550
+#include <include/linux/spinlock.h> //added for cs1550
+//Do we need to put cs1550_sem in a header file?
 
 #include <linux/compat.h>
 #include <linux/syscalls.h>
@@ -2357,3 +2360,51 @@ int orderly_poweroff(bool force)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(orderly_poweroff);
+
+/**
+ * Semaphore for cs1550
+ * Should this be here or in its own header file?
+ */
+struct cs1550_sem {
+	int value;
+	spinlock_t sem_lock;
+	DEFINE_SPINLOCK(sem_lock); //not sure if value should be passed here.
+};
+
+/**
+ * down() syscall for CS1550.
+ * This will down the semaphore in cs1550_sem struct.
+ * @param sem - a semaphore struct with a single value
+ * @return
+ */
+asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
+	int value = sem->value;
+	if (value <= 0) {
+		//need to sleep since the sem value can't go negative
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule();
+	} else {
+		//decrement semaphore
+		sem->value--;
+	}
+	//What do we return?
+}
+
+/**
+ * up() syscall for CS1550.
+ * This will up the semaphore in cs1550_sem struct.
+ * @param sem - a semaphore struct with a single value.
+ * @return
+ */
+asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
+	int value = sem->value;
+	if (value == 0) {
+		//need to wake up the sleeping process since the sem value is zero
+		wake_up_process(sleeping_task);
+		sem->value++;
+	} else {
+		//increment semaphore
+		sem->value++;
+	}
+	//What do we return?
+}

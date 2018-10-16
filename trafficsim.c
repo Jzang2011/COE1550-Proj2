@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
+#include <unistd.h> //this should use the one in linux-2.6.23.1
 
 /**
  * 1. Treat the road as two queues, and have a producer for each direction putting cars into the
@@ -21,13 +21,20 @@ typedef struct Car {
     int car_id;
 } Car;
 
-int flag_person;
-Car south_bound_producer[10] = {0,0,0,0,0,0,0,0,0,0};
-Car north_bound_producer[10] = {0,0,0,0,0,0,0,0,0,0};
+//PID's for processes.
+int flag_person_pid;
+int north_bound_pid;
+int south_bound_pid;
+
+Car south_bound_queue[10] = {0,0,0,0,0,0,0,0,0,0};
+Car north_bound_queue[10] = {0,0,0,0,0,0,0,0,0,0};
 
 Car* north_bound_first;
 Car* south_bount_first;
-
+Car* north_bound_last;
+Car* south_bount_last;
+int north_bound_size;
+int south_bound_size;
 
 
 /**
@@ -43,7 +50,7 @@ typedef struct cs1550_sem {
  * @param sem - the semaphore being down'ed
  */
 void down(cs1550_sem *sem) {
-    //syscall(__NR_cs1550_down, sem);
+    syscall(__NR_cs1550_down, sem);
 }
 
 /**
@@ -51,7 +58,7 @@ void down(cs1550_sem *sem) {
  * @param sem - the semaphore being up'ed
  */
 void up(cs1550_sem *sem) {
-    //syscall(__NR_cs1550_up, sem);
+    syscall(__NR_cs1550_up, sem);
 }
 
 
@@ -64,9 +71,9 @@ void init_sim() {
     //Initialize memory space
 
     //Initialize processes.
-    flag_person = fork();
-    south_bound_producer = fork();
-    north_bound_producer = fork();
+    flag_person_pid = fork();
+    south_bound_pid = fork();
+    north_bound_pid = fork();
 }
 
 /**
@@ -83,16 +90,69 @@ int chance_80(){
     }
 }
 
+void delay_20_sec() {
+    //once no car comes, there is a 20 second delay before any new car will come.
+    //sleep for 20 seconds to simulate this.
+    sleep(20);
+}
+
+void let_car_through() {
+    //Each car takes 2 seconds to go through the construction area.
+    //Sleep for 2 seconds to simulate this.
+    sleep(2);
+}
+
+void wake_up_flagperson() {
+    //car honks horn and wakes up flag person
+
+}
+
+/**
+ * Gets the current system time.
+ *  use timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec to get hours, minutes and seconds.
+ * @return A struct tm* which represents the current local system time.
+ */
+struct tm* get_time() {
+    time_t rawtime;
+    struct tm* timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+//    printf ("Current local time and date: %d:%d:%d",timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    return timeinfo;
+}
+
+
 int main(int argc, char **argv) {
-//    srand(time(NULL));
-//    printf("chance_80 returned %d\n", chance_80());
-//    printf("chance_80 returned %d\n", chance_80());
-//    printf("chance_80 returned %d\n", chance_80());
-//    printf("chance_80 returned %d\n", chance_80());
-//    printf("chance_80 returned %d\n", chance_80());
+    srand(time(NULL));
 
     //Start by initializing the simulation.
-    init_sim();
+     init_sim();
+
+    //Gets the current process ID. This dictates what code to run (producer or consumer)
+    int current_process = getpid();
+
+    if (current_process == flag_person_pid) {
+        //Consumer code
+        // allow cars to travel (consume)
+        // call newly created up()
+        // Do more stuff
+        // call newly created down()
+    } else if (current_process == south_bound_pid) {
+        //Producer code
+        //generate cars
+        // call newly created up()
+        // Do more stuff
+        // add to southbound_queue
+        // call newly created down()
+    } else if (current_process == north_bound_pid) {
+        //Producer code
+        //generate cars
+        // call newly created up()
+        // Do more stuff
+        // add to north_bound_queue
+        // call newly created down()
+    }
+
 
     return 0;
 }
