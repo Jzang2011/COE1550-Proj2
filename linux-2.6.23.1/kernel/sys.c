@@ -34,7 +34,8 @@
 #include <linux/seccomp.h>
 #include <linux/cpu.h>
 #include <linux/spinlock.h> //added for cs1550
-#include <cs1550_sem.h> //added for cs1550
+#include "cs1550_sem.h" //added for cs1550
+#include <linux/cs1550_queue.h>
 
 #include <linux/compat.h>
 #include <linux/syscalls.h>
@@ -2368,15 +2369,15 @@ EXPORT_SYMBOL_GPL(orderly_poweroff);
  */
 asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
 	spin_lock(sem->sem_lock);
-	int value = sem->value;
-	if (value <= 0) {
+	sem->value--;
+	if (sem->value <= 0) {
+		enqueue_process(&sem->process_queue, current);
 		spin_unlock(sem->sem_lock);
 		//need to sleep since the sem value can't go negative
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
 	} else {
 		//decrement semaphore
-		sem->value--;
 		spin_unlock(sem->sem_lock);
 	}
 
@@ -2391,16 +2392,13 @@ asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
  */
 asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
 	spin_lock(sem->sem_lock);
-	int value = sem->value;
-	if (value == 0) {
+	sem->value++;
+	if (sem->value == 0) {
 		//need to wake up the sleeping process since the sem value is zero
-		wake_up_process(sleeping_task);
-		sem->value++;
-	} else {
-		//increment semaphore
-		sem->value++;
-	}
+		struct task_struct* task = dequeue_process(&sem->process_queue);
+		wake_up_process(task);
+	} 
 	spin_unlock(sem->sem_lock);
 
-	return value;
+	return sem->value;
 }

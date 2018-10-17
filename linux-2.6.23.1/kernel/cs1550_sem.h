@@ -2,25 +2,34 @@
 // Created by Jeremy Zang on 10/16/18.
 //
 
-#include <include/linux/spinlock.h> //added for cs1550
-#include <include/linux/spinlock_types.h> //added for cs1550
-#include <sched.h>
+#include <linux/spinlock.h> //added for cs1550
+#include <linux/spinlock_types.h> //added for cs1550
+#include <linux/cs1550_queue.h>
+//#include <sched.h>
 
 /**
  * Car struct.
  */
 typedef struct Car {
     int car_id;
+    //Add arrival time.?
 } Car;
 
 /**
  * Semaphore for cs1550
- * Should this be here or in its own header file?
  */
 struct cs1550_sem {
     int value;
     spinlock_t sem_lock;
-    //add queue here. each instance of a cs1550_sem will have queue. This will be instantiated in trafficsim.c
-    // and specifying what the queue instance will be.
-    int car; //Replace with a queue later after testing up() and down()
+    struct process_queue_type process_queue;
+
+    //queue of processes.
+    //use cs1550_queue.h here.
+//    struct task_struct process_queue[5];
+//    int head = 0;
+//    int tail = 0;
+//    int count = 0;
+
+    //This will replace the queue above.
+    //DECLARE_QUEUE(process_queue, process_queue_type)
 };
