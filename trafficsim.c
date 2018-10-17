@@ -3,6 +3,13 @@
 #include <time.h>
 #include <sys/mman.h>
 #include <unistd.h> //this should use the one in linux-2.6.23.1
+#include <include/linux/spinlock_types.h>
+#include <include/linux/spinlock.h>
+#include <kernel/cs1550_sem.h>
+
+#include "linux-2.6.23.1/include/asm/unistd.h"
+#include "linux-2.6.23.1/kernel/cs1550_sem.h"
+#include "linux-2.6.23.1/include/linux/spinlock_types.h"
 
 /**
  * 1. Treat the road as two queues, and have a producer for each direction putting cars into the
@@ -15,46 +22,44 @@
  * 5.
  */
 
-/**
- * Car struct.
- */
-typedef struct Car {
-    int car_id;
-} Car;
-
 //PID's for processes.
 int* flag_person_pid = NULL;
 int* north_bound_pid = NULL;
 int* south_bound_pid = NULL;
 
+//TODO: make array for the queue inside the cs1550_sem struct.
 //Car south_bound_queue[10] = {0,0,0,0,0,0,0,0,0,0};
 //Car north_bound_queue[10] = {0,0,0,0,0,0,0,0,0,0};
-Car* south_bound_queue;
-Car* north_bound_queue;
+int* south_bound_queue;
+int* north_bound_queue;
 
-
-Car* north_bound_first;
-Car* south_bount_first;
-Car* north_bound_last;
-Car* south_bount_last;
+int* north_bound_first;
+int* south_bount_first;
+int* north_bound_last;
+int* south_bount_last;
 int* north_bound_size;
 int* south_bound_size;
-struct cs1550_sem* sem;
 
+struct cs1550_sem sem;
+int car_count = 0;
 
-/**
- * Should this go in kernel?
- */
-typedef struct cs1550_sem {
-    int value;
-    //Some queue goes here? 10/15/18
-} cs1550_sem;
+void add_to_queue(Car* queue) {
+
+}
+
+void remove_from_queue(Car* queue) {
+
+}
+
+int is_queue_empty(Car* queue) {
+
+}
 
 /**
  * Used to call our modified syscall in the linux kernel to down our semaphore.
  * @param sem - the semaphore being down'ed
  */
-void down(cs1550_sem *sem) {
+void down(struct cs1550_sem *sem) {
     syscall(__NR_cs1550_down, sem);
 }
 
@@ -62,7 +67,7 @@ void down(cs1550_sem *sem) {
  * Used to call our modified syscall in the linux kernel to up our semaphore.
  * @param sem - the semaphore being up'ed
  */
-void up(cs1550_sem *sem) {
+void up(struct cs1550_sem *sem) {
     syscall(__NR_cs1550_up, sem);
 }
 
@@ -73,20 +78,19 @@ void up(cs1550_sem *sem) {
 int calculate_mem_size() {
     int N = 0;
     N = N + (sizeof(int) * 5); //add the size of 5 ints (3 for process ids and 2 for size of queues)
-    N = N + (sizeof(Car) * 24); // 10 for each queue (20 total) + 2 for the head and tail pointers (4 total)
-    N = N + sizeof(cs1550_sem);
+    N = N + (sizeof(int) * 24); // 10 for each queue (20 total) + 2 for the head and tail pointers (4 total)
+
     return N;
 }
 
 void init_ptrs(void* ptr_to_mem) {
-    int sizeOfCar = sizeof(Car);
-    sem = ptr_to_mem;
-    south_bound_size = ptr_to_mem + sizeof(cs1550_sem);
+    int sizeOfCar = sizeof(int);
+    south_bound_size = ptr_to_mem;
     north_bound_size = south_bound_size + 1;
     flag_person_pid = north_bound_size + 1;
     north_bound_pid = flag_person_pid + 1;
     south_bound_pid = north_bound_pid + 1;
-    north_bound_first = (Car *) (south_bound_pid + sizeOfCar);
+    north_bound_first = south_bound_pid + sizeOfCar;
     north_bound_last = north_bound_first + sizeOfCar;
     south_bount_first = north_bound_last + sizeOfCar;
     south_bount_last = south_bount_first + sizeOfCar;
@@ -103,11 +107,8 @@ void init_sim() {
     //Initialize memory space
     int N = calculate_mem_size();
     void* ptr = mmap(NULL, N, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, 0, 0);
-    init_ptrs(ptr);
-    //Initialize processes.
-    *flag_person_pid = fork();
-    *south_bound_pid = fork();
-    *north_bound_pid = fork();
+    init_ptrs(ptr); //initializes the global pointers.
+    DEFINE_SPINLOCK(sem.sem_lock); //initializes the semaphores lock with a spin lock.
 }
 
 /**
@@ -156,36 +157,94 @@ struct tm* get_time() {
     return timeinfo;
 }
 
+/**
+ * Gets key from user.
+ * Note: Reused from project 1.
+ * @return - The key pressed by the user.
+ */
+char getkey() {
+    char key = 0;
+    int fD = 0; //fD is the file descriptor. 0 for keyboard input.
+    int nfds = 1; //number of file descriptors. 1 since we are only worried about keyboard input.
+    fd_set fs; //declare a fd_set named fs
+
+    FD_ZERO(&fs);
+    FD_SET(fD, &fs);
+
+    struct timeval time;
+    time.tv_sec = 0;
+    time.tv_usec = 0;
+
+    //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
+    int numberOfKeysReady = select(nfds, &fs, NULL, NULL, &time); //Look up man pages for select(2)
+
+    //if numberOfKeysReady == 1 read from the file descriptor
+    // use read sys call to get the key pressed
+    if (numberOfKeysReady > 0)
+    {
+        //ssize_t read(int fd, void *buf, size_t count);
+        read(fD, &key, 1);
+    }
+    return key; //value of key is the decimal value of the character. See ascii table.
+}
 
 int main(int argc, char **argv) {
     srand(time(NULL));
+    char key = getkey();
 
     //Start by initializing the simulation.
      init_sim();
 
     //Gets the current process ID. This dictates what code to run (producer or consumer)
-    int current_process = getpid();
+    int current_process = fork();
 
-    if (current_process == flag_person_pid) {
-        //Consumer code
-        // allow cars to travel (consume)
-        // call newly created up()
-        // Do more stuff
-        // call newly created down()
-    } else if (current_process == south_bound_pid) {
-        //Southbound Producer code
-        //generate cars
-        // call newly created up()
-        // Do more stuff
-        // add to southbound_queue
-        // call newly created down()
-    } else if (current_process == north_bound_pid) {
-        //Northbound Producer code
-        //generate cars
-        // call newly created up()
-        // Do more stuff
-        // add to north_bound_queue
-        // call newly created down()
+    if (current_process == 0) { //child process
+       //Northbound producer
+        *north_bound_pid = getpid();
+        while(key != 'q') {
+            // generate cars
+            down(&sem);
+            //TODO: add to northbound_queue here.
+            int car = car_count;
+            sem.car = car;
+            car_count++; //increment car count so next car created has a new id.
+            printf("Car %d coming from the N direction, arrived in the queue at time %d:%d:%d", car_count, get_time()->tm_hour, get_time()->tm_min, get_time()->tm_sec);
+            up(&sem);
+
+            key = getkey();
+        }
+    } else if (current_process > 0) { //parent process.
+        int pid = fork(); //fork again from parent process to create a third process.
+        if(pid == 0) { //child2 process.
+            //Southbound producer
+            *south_bound_pid = getpid();
+            while(key != 'q') {
+                // generate cars
+                down(&sem);
+                //TODO: add to southbound_queue here.
+                int car = car_count;
+                sem.car = car;
+                car_count++;
+                printf("Car %d coming from the S direction, arrived in the queue at time %d:%d:%d", car_count, get_time()->tm_hour, get_time()->tm_min, get_time()->tm_sec);
+                up(&sem);
+
+                key = getkey();
+            }
+
+        } else if (pid > 0) { //parent process.
+            //Flag Person
+            *flag_person_pid = getpid();
+            // allow cars to travel (consume)
+            while(key != 'q'){
+                down(&sem);
+                //Remove car from either  northbound or southbound based on logic defined in project description.
+
+                up(&sem);
+
+                key = getkey();
+            }
+
+        }
     }
 
 
