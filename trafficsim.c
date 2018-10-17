@@ -6,10 +6,12 @@
 #include <linux/spinlock_types.h>
 #include <linux/spinlock.h>
 #include <kernel/cs1550_sem.h>
+#include <linux/cs1550_queue.h>
 
-#include "linux-2.6.23.1/include/asm/unistd.h"
-#include "linux-2.6.23.1/kernel/cs1550_sem.h"
-#include "linux-2.6.23.1/include/linux/spinlock_types.h"
+//#include "linux-2.6.23.1/include/asm/unistd.h"
+//#include "linux-2.6.23.1/kernel/cs1550_sem.h"
+//#include "linux-2.6.23.1/include/linux/spinlock_types.h"
+//#include "linux-2.6.23.1/include/linux/cs1550_queue.h"
 
 /**
  * 1. Treat the road as two queues, and have a producer for each direction putting cars into the
@@ -57,6 +59,9 @@ my_sems sems;
 
 int car_count = 0;
 
+struct car_queue_type* north_bound;
+struct car_queue_type* south_bound;
+
 /**
  * Used to call our modified syscall in the linux kernel to down our semaphore.
  * @param sem - the semaphore being down'ed
@@ -90,7 +95,7 @@ int calculate_mem_size() {
 void init_ptrs(void* ptr_to_mem) {
     int sizeOfSem = sizeof(struct cs1550_sem);
     producer_ints.south_bound_size = ptr_to_mem;
-    producer_ints.north_bound_size = my_ints.south_bound_size + 1;
+    producer_ints.north_bound_size = producer_ints.south_bound_size + 1;
     flag_person_pid = producer_ints.north_bound_size + 1;
     north_bound_pid = flag_person_pid + 1;
     south_bound_pid = north_bound_pid + 1;
@@ -116,9 +121,9 @@ void init_sim() {
     void* ptr = mmap(NULL, N, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, 0, 0);
     init_ptrs(ptr); //initializes the global pointers.
     //initializes the semaphores lock with a spin lock.
-    my_sems.sem_flag_person->sem_lock = __SPIN_LOCK_UNLOCKED(sem_flag_person.sem_lock);
-    my_sems.sem_north_bound->sem_lock = __SPIN_LOCK_UNLOCKED(sem_north_bound.sem_lock);
-    my_sems.sem_south_bound->sem_lock = __SPIN_LOCK_UNLOCKED(sem_south_bound.sem_lock);
+    sems.sem_flag_person->sem_lock = __SPIN_LOCK_UNLOCKED(sem_flag_person.sem_lock);
+    sems.sem_north_bound->sem_lock = __SPIN_LOCK_UNLOCKED(sem_north_bound.sem_lock);
+    sems.sem_south_bound->sem_lock = __SPIN_LOCK_UNLOCKED(sem_south_bound.sem_lock);
 }
 
 /**
@@ -215,12 +220,12 @@ int main(int argc, char **argv) {
             //add sem here.
             // generate cars
 
-            down(my_sems.sem_north_bound);
+            down(sems.sem_north_bound);
             //TODO: add to northbound_queue here.
             int car = car_count;
             car_count++; //increment car count so next car created has a new id.
             printf("Car %d coming from the N direction, arrived in the queue at time %d:%d:%d", car_count, get_time()->tm_hour, get_time()->tm_min, get_time()->tm_sec);
-            up(my_sems.sem_north_bound);
+            up(sems.sem_north_bound);
 
             key = getkey();
         }
@@ -231,12 +236,12 @@ int main(int argc, char **argv) {
             *south_bound_pid = getpid();
             while(key != 'q') {
                 // generate cars
-                down(my_sems.sem_south_bound);
+                down(sems.sem_south_bound);
                 //TODO: add to southbound_queue here.
                 int car = car_count;
                 car_count++;
                 printf("Car %d coming from the S direction, arrived in the queue at time %d:%d:%d", car_count, get_time()->tm_hour, get_time()->tm_min, get_time()->tm_sec);
-                up(my_sems.sem_south_bound);
+                up(sems.sem_south_bound);
 
                 key = getkey();
             }
@@ -246,10 +251,10 @@ int main(int argc, char **argv) {
             *flag_person_pid = getpid();
             // allow cars to travel (consume)
             while(key != 'q'){
-                down(my_sems.sem_flag_person);
+                down(sems.sem_flag_person);
                 //Remove car from either  northbound or southbound based on logic defined in project description.
 
-                up(my_sems.sem_flag_person);
+                up(sems.sem_flag_person);
 
                 key = getkey();
             }

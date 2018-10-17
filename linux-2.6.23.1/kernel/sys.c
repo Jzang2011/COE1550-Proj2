@@ -2369,18 +2369,16 @@ EXPORT_SYMBOL_GPL(orderly_poweroff);
  */
 asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
 	spin_lock(sem->sem_lock);
-	sem->value--;
-	if (sem->value <= 0) {
-		enqueue_process(&sem->process_queue, current);
-		spin_unlock(sem->sem_lock);
+	sem->value--; //decrement semaphore
+	if (sem->value < 0) {
+		enqueue_process(&sem->process_queue, current); //add the process to the process_queue
+		spin_unlock(sem->sem_lock); //release the lock to prevent deadlock
 		//need to sleep since the sem value can't go negative
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
 	} else {
-		//decrement semaphore
 		spin_unlock(sem->sem_lock);
 	}
-
 	return 0;
 }
 
@@ -2393,7 +2391,7 @@ asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
 asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
 	spin_lock(sem->sem_lock);
 	sem->value++;
-	if (sem->value == 0) {
+	if (sem->value <= 0) {
 		//need to wake up the sleeping process since the sem value is zero
 		struct task_struct* task = dequeue_process(&sem->process_queue);
 		wake_up_process(task);

@@ -8,7 +8,7 @@
 //#define DEFINE_QUEUE(name, size)
 
     struct car_queue_type {
-        void *buffer[(10)];
+        void *buffer[10];
         int head;
         int tail;
         int count;
@@ -46,7 +46,7 @@
     }
 
 struct process_queue_type {
-    void *buffer[(10)];
+    void *buffer[10];
     int head;
     int tail;
     int count;
