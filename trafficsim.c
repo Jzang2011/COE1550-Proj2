@@ -2,16 +2,11 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/mman.h>
-#include <unistd.h> //this should use the one in linux-2.6.23.1
+#include <asm/unistd.h> //this should use the one in linux-2.6.23.1
 #include <linux/spinlock_types.h>
 #include <linux/spinlock.h>
-#include <kernel/cs1550_sem.h>
 #include <linux/cs1550_queue.h>
-
-//#include "linux-2.6.23.1/include/asm/unistd.h"
-//#include "linux-2.6.23.1/kernel/cs1550_sem.h"
-//#include "linux-2.6.23.1/include/linux/spinlock_types.h"
-//#include "linux-2.6.23.1/include/linux/cs1550_queue.h"
+#include <linux/cs1550_sem.h>
 
 /**
  * 1. Treat the road as two queues, and have a producer for each direction putting cars into the
@@ -93,7 +88,7 @@ int calculate_mem_size() {
 }
 
 void init_ptrs(void* ptr_to_mem) {
-    int sizeOfSem = sizeof(struct cs1550_sem);
+    int sizeOfSem = sizeof(typeof(sems.sem_flag_person));
     producer_ints.south_bound_size = ptr_to_mem;
     producer_ints.north_bound_size = producer_ints.south_bound_size + 1;
     flag_person_pid = producer_ints.north_bound_size + 1;
@@ -170,6 +165,13 @@ struct tm* get_time() {
     timeinfo = localtime(&rawtime);
 //    printf ("Current local time and date: %d:%d:%d",timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
     return timeinfo;
+}
+
+//Is this the best way to get the time from a car? 
+void print_car_time(Car* c) {
+    time_t rawtime;
+    time(&rawtime);
+    c->timeinfo = localtime(&rawtime);
 }
 
 /**

@@ -34,7 +34,7 @@
 #include <linux/seccomp.h>
 #include <linux/cpu.h>
 #include <linux/spinlock.h> //added for cs1550
-#include "cs1550_sem.h" //added for cs1550
+#include <linux/cs1550_sem.h> //added for cs1550
 #include <linux/cs1550_queue.h>
 
 #include <linux/compat.h>

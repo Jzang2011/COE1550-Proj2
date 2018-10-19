@@ -11,6 +11,7 @@
  */
 typedef struct Car {
     int car_id;
+    struct tm* timeinfo;
     //Add arrival time.?
 } Car;
 
