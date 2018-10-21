@@ -34,8 +34,9 @@
 #include <linux/seccomp.h>
 #include <linux/cpu.h>
 #include <linux/spinlock.h> //added for cs1550
+#include <linux/spinlock_types.h> //added for cs1550
 #include <linux/cs1550_sem.h> //added for cs1550
-#include <linux/cs1550_queue.h>
+#include <linux/cs1550_queue.h> //added for cs1550
 
 #include <linux/compat.h>
 #include <linux/syscalls.h>
@@ -2362,22 +2363,32 @@ int orderly_poweroff(bool force)
 EXPORT_SYMBOL_GPL(orderly_poweroff);
 
 /**
+ * Defining the semaphore spinlock.
+ */
+DEFINE_SPINLOCK(sem_lock);
+
+/**
  * down() syscall for CS1550.
  * This will down the semaphore in cs1550_sem struct.
  * @param sem - a semaphore struct with a single value
  * @return
  */
 asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
-	spin_lock(sem->sem_lock);
+	printk("syscall down entered\n");
+	spin_lock(&sem_lock);
+	printk("spin_lock ed \n");
 	sem->value--; //decrement semaphore
+	printk("decremented sem value\n");
 	if (sem->value < 0) {
 		enqueue_process(&sem->process_queue, current); //add the process to the process_queue
-		spin_unlock(sem->sem_lock); //release the lock to prevent deadlock
+		printk("Process enqueued line 2381 sys.c\n");
+		spin_unlock(&sem_lock); //release the lock to prevent deadlock
 		//need to sleep since the sem value can't go negative
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
 	} else {
-		spin_unlock(sem->sem_lock);
+		spin_unlock(&sem_lock);
+		printk("spin_unlock()ed\n");
 	}
 	return 0;
 }
@@ -2389,14 +2400,19 @@ asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
  * @return
  */
 asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
-	spin_lock(sem->sem_lock);
+	printk("syscall up entered\n");
+	spin_lock(&sem_lock);
+    printk("spin_lock ed in UP \n");
 	sem->value++;
+    printk("incremented sem value in UP\n");
 	if (sem->value <= 0) {
 		//need to wake up the sleeping process since the sem value is zero
 		struct task_struct* task = dequeue_process(&sem->process_queue);
+		printk("Process dequeued line 2404 sys.c\n");
 		wake_up_process(task);
+		printk("Process woken up in up()\n");
 	} 
-	spin_unlock(sem->sem_lock);
-
+	spin_unlock(&sem_lock);
+    printk("spin_unlock()ed in UP.\n");
 	return sem->value;
 }
