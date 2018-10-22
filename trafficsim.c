@@ -401,7 +401,7 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
         down(empty_sem);
         down(sems.sem_mutex);
         //Create a car
-        Car* car = malloc(sizeof(Car));
+        Car* car = malloc(sizeof(Car)); //quit doing this. handle in enqueue.
         car->car_id = *car_id_count;
         car->dir = direction;
         *car_id_count = *car_id_count + 1; //increment car count so next car created has a new id.
@@ -413,7 +413,6 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
         if(is_full(queue)){
             //When the que becomes full set the current_direction to this direction
             // so that the flag_person can start consuming from the full queue.
-//            *current_direction = direction;
             if (direction == NORTH) {
                 printf("NorthBound Queue is full (line 393)\n");
             } else {
@@ -429,12 +428,13 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
         up(full_sem);
     }
     while(chance_80());
+    //process needs to be be slept at this point. But how?
     delay_20_sec(); //once no car comes there is a 20 second delay before any new car will come.
     return 1;
 }
 
 int main(int argc, char **argv) {
-    srand(time(NULL));
+    srand(1); //TODO: Change to NULL after done debugging
     char key = getkey();
 
     //Start by initializing the simulation.

@@ -35,9 +35,6 @@
 #include <linux/cpu.h>
 #include <linux/spinlock.h> //added for cs1550
 #include <linux/spinlock_types.h> //added for cs1550
-//#include <linux/cs1550_sem.h> //added for cs1550
-//#include <linux/cs1550_queue.h> //added for cs1550
-
 #include <linux/compat.h>
 #include <linux/syscalls.h>
 #include <linux/kprobes.h>
@@ -2363,10 +2360,11 @@ int orderly_poweroff(bool force)
 EXPORT_SYMBOL_GPL(orderly_poweroff);
 
 /**
- * Defining the semaphore spinlock.
+ * Defining the spinlock.
  */
 DEFINE_SPINLOCK(sem_lock);
 
+//Put cs1550_node in sys.c to avoid header issues.
 struct cs1550_node {
     struct cs1550_node* next;
     struct task_struct* task_info;
@@ -2383,7 +2381,7 @@ struct cs1550_sem {
 
 void enqueue_process(struct cs1550_node* task, struct cs1550_sem* sem) {
     if (sem->head == NULL) { //Empty list when head is null
-        sem->head = task;
+        sem->head = task; //creates linked list 1 node long.
         sem->tail = task;
     } else {
         //list is not empty. Put task at tail
@@ -2410,9 +2408,6 @@ struct task_struct* dequeue_process(struct cs1550_sem* sem) {
     return NULL; //return null when task is null.
 }
 
-
-
-
 /**
  * down() syscall for CS1550.
  * This will down the semaphore in cs1550_sem struct.
@@ -2420,24 +2415,19 @@ struct task_struct* dequeue_process(struct cs1550_sem* sem) {
  * @return
  */
 asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
-//	printk("syscall down entered\n");
 	spin_lock(&sem_lock);
-//	printk("spin_lock ed \n");
 	sem->value--; //decrement semaphore
-//	printk("decremented sem value\n");
 	if (sem->value < 0) { //block here
         struct cs1550_node* task = (struct cs1550_node*) kmalloc(sizeof(struct cs1550_node), GFP_ATOMIC);
         task->task_info = current; //uses current global variable (the current task being run)
         task->next = NULL; //next should be initialized to null.
 		enqueue_process(task, sem); //add the task to the process_queue
-//		printk("Process enqueued line 2414 sys.c\n");
 		//need to sleep since the sem value can't go negative
 		set_current_state(TASK_INTERRUPTIBLE);
         spin_unlock(&sem_lock); //release the lock to prevent deadlock
 		schedule(); //schedules a new process to run
 	} else {
 		spin_unlock(&sem_lock);
-//		printk("spin_unlock()ed\n");
 	}
 	return 0;
 }
@@ -2449,21 +2439,15 @@ asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
  * @return
  */
 asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
-//	printk("syscall up entered\n");
 	spin_lock(&sem_lock);
-//    printk("spin_lock ed in UP \n");
 	sem->value++;
-//    printk("incremented sem va/lue in UP\n");
 	if (sem->value <= 0) {
 		//need to wake up the sleeping process since the sem value is zero
-//		printk("Process dequeued line 2404 sys.c\n");
         struct task_struct* task_info;
         task_info = dequeue_process(sem);
 		wake_up_process(task_info);
         kfree(sem->head);
-//		printk("Process woken up in up()\n");
-	} 
+	}
 	spin_unlock(&sem_lock);
-//    printk("spin_unlock()ed in UP.\n");
 	return 0;
 }
