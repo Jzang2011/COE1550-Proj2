@@ -35,8 +35,8 @@
 #include <linux/cpu.h>
 #include <linux/spinlock.h> //added for cs1550
 #include <linux/spinlock_types.h> //added for cs1550
-#include <linux/cs1550_sem.h> //added for cs1550
-#include <linux/cs1550_queue.h> //added for cs1550
+//#include <linux/cs1550_sem.h> //added for cs1550
+//#include <linux/cs1550_queue.h> //added for cs1550
 
 #include <linux/compat.h>
 #include <linux/syscalls.h>
@@ -2367,6 +2367,52 @@ EXPORT_SYMBOL_GPL(orderly_poweroff);
  */
 DEFINE_SPINLOCK(sem_lock);
 
+struct cs1550_node {
+    struct cs1550_node* next;
+    struct task_struct* task_info;
+};
+
+//Put cs1550_sem in sys.c to avoid header issues.
+struct cs1550_sem {
+    int value;
+
+    //linked list of process/tasks
+    struct cs1550_node* head;
+    struct cs1550_node* tail;
+};
+
+void enqueue_process(struct cs1550_node* task, struct cs1550_sem* sem) {
+    if (sem->head == NULL) { //Empty list when head is null
+        sem->head = task;
+        sem->tail = task;
+    } else {
+        //list is not empty. Put task at tail
+        sem->tail->next = task; //connect task to end of list
+        sem->tail = task; //set new tail
+    }
+}
+
+struct task_struct* dequeue_process(struct cs1550_sem* sem) {
+    struct cs1550_node* task = sem->head;
+    struct task_struct* task_info;
+    if (task != NULL) { //make sure there is a task to dequeue
+        task_info = task->task_info; //get task_info from the node.
+
+        if (sem->head == sem->tail) { //last node
+            sem->tail = NULL; //set linked list to null since last node was removed.
+            sem->head = NULL;
+        } else {
+            sem->head = task->next; //sets the new head of the list
+        }
+
+        return  task_info;
+    }
+    return NULL; //return null when task is null.
+}
+
+
+
+
 /**
  * down() syscall for CS1550.
  * This will down the semaphore in cs1550_sem struct.
@@ -2374,21 +2420,24 @@ DEFINE_SPINLOCK(sem_lock);
  * @return
  */
 asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
-	printk("syscall down entered\n");
+//	printk("syscall down entered\n");
 	spin_lock(&sem_lock);
-	printk("spin_lock ed \n");
+//	printk("spin_lock ed \n");
 	sem->value--; //decrement semaphore
-	printk("decremented sem value\n");
-	if (sem->value < 0) {
-		enqueue_process(&sem->process_queue, current); //add the process to the process_queue
-		printk("Process enqueued line 2381 sys.c\n");
-		spin_unlock(&sem_lock); //release the lock to prevent deadlock
+//	printk("decremented sem value\n");
+	if (sem->value < 0) { //block here
+        struct cs1550_node* task = (struct cs1550_node*) kmalloc(sizeof(struct cs1550_node), GFP_ATOMIC);
+        task->task_info = current; //uses current global variable (the current task being run)
+        task->next = NULL; //next should be initialized to null.
+		enqueue_process(task, sem); //add the task to the process_queue
+//		printk("Process enqueued line 2414 sys.c\n");
 		//need to sleep since the sem value can't go negative
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule();
+        spin_unlock(&sem_lock); //release the lock to prevent deadlock
+		schedule(); //schedules a new process to run
 	} else {
 		spin_unlock(&sem_lock);
-		printk("spin_unlock()ed\n");
+//		printk("spin_unlock()ed\n");
 	}
 	return 0;
 }
@@ -2400,19 +2449,21 @@ asmlinkage long sys_cs1550_down(struct cs1550_sem* sem) {
  * @return
  */
 asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
-	printk("syscall up entered\n");
+//	printk("syscall up entered\n");
 	spin_lock(&sem_lock);
-    printk("spin_lock ed in UP \n");
+//    printk("spin_lock ed in UP \n");
 	sem->value++;
-    printk("incremented sem value in UP\n");
+//    printk("incremented sem va/lue in UP\n");
 	if (sem->value <= 0) {
 		//need to wake up the sleeping process since the sem value is zero
-		struct task_struct* task = dequeue_process(&sem->process_queue);
-		printk("Process dequeued line 2404 sys.c\n");
-		wake_up_process(task);
-		printk("Process woken up in up()\n");
+//		printk("Process dequeued line 2404 sys.c\n");
+        struct task_struct* task_info;
+        task_info = dequeue_process(sem);
+		wake_up_process(task_info);
+        kfree(sem->head);
+//		printk("Process woken up in up()\n");
 	} 
 	spin_unlock(&sem_lock);
-    printk("spin_unlock()ed in UP.\n");
-	return sem->value;
+//    printk("spin_unlock()ed in UP.\n");
+	return 0;
 }
