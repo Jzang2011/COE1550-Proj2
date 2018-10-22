@@ -2445,8 +2445,10 @@ asmlinkage long sys_cs1550_up(struct cs1550_sem* sem) {
         //need to wake up the sleeping process since the sem value is zero
         struct task_struct* task_info;
         task_info = dequeue_process(sem);
-        wake_up_process(task_info);
-        kfree(sem->head);
+        if (task_info != NULL) {
+            wake_up_process(task_info);
+            kfree(sem->head);
+        }
     }
     spin_unlock(&sem_lock);
     return 0;

@@ -36,7 +36,6 @@ typedef struct Car {
  * car_queue uses circular queue implementation.
  */
 struct car_queue {
-//    void *buffer[10];
     struct Car buffer[10];
     int head;
     int tail;
@@ -45,7 +44,7 @@ struct car_queue {
 };
 
 /**
- * cs1550_sem
+ * cs1550_sem.
  */
 struct cs1550_sem {
     int value;
@@ -84,7 +83,7 @@ int is_empty(struct car_queue *queue) {
  */
 void enqueue(struct car_queue *queue, struct Car* item) {
     queue->buffer[queue->tail % CAR_QUEUE_SIZE] = *item;
-    queue->tail = (queue->tail + 1) % CAR_QUEUE_SIZE;
+    queue->tail = (queue->tail + 1) % CAR_QUEUE_SIZE; //This may be redundant
     queue->count++;
 }
 
@@ -96,7 +95,7 @@ void enqueue(struct car_queue *queue, struct Car* item) {
 struct Car* dequeue(struct car_queue *queue) {
     if (!is_empty(queue)) {
         struct Car* item = &(queue->buffer[queue->head % CAR_QUEUE_SIZE]);
-        queue->head = (queue->head + 1) % CAR_QUEUE_SIZE;
+        queue->head = (queue->head + 1) % CAR_QUEUE_SIZE; //This may be redundant
         queue->count--;
         return item;
     }
@@ -123,6 +122,7 @@ typedef struct {
     struct cs1550_sem* sb_empty;
 
     struct cs1550_sem* sem_mutex;
+
 } my_sems;
 
 my_sems sems;
@@ -154,7 +154,6 @@ void up(struct cs1550_sem *sem) {
 * @return N - the number of bytes.
 */
 int calculate_mem_size() {
-    printf("Calculating Mem size \n");
     int N = 0;
     N = N + sizeof(struct car_queue); //Size of one queue
     N = N + sizeof(struct car_queue); //Size of another queue
@@ -200,7 +199,6 @@ void init_ptrs(void* ptr_to_mem) {
 *  - Initializes 1 consumer (flagperson)
 */
 void init_sim() {
-    printf("initializing simulation.\n");
     //Initialize memory space
     int N = calculate_mem_size();
     void* ptr = mmap(NULL, N, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, 0, 0);
@@ -226,7 +224,6 @@ void init_sim() {
     sems.nb_full->tail = NULL;
     sems.sem_mutex->head = NULL;
     sems.sem_mutex->tail = NULL;
-
 }
 
 /**
@@ -236,7 +233,6 @@ void init_sim() {
 */
 int chance_80(){
     int r = rand() % 10;
-    printf("value of r is %d\n", r);
     if (r < 8) {
         return 1;
     } else {
@@ -247,7 +243,6 @@ int chance_80(){
 void delay_20_sec() {
     //once no car comes, there is a 20 second delay before any new car will come.
     //sleep for 20 seconds to simulate this.
-    printf("sleeping for 20\n");
     sleep(20);
 }
 
@@ -268,7 +263,6 @@ struct tm* get_time() {
     struct tm* timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-//    printf ("Current local time and date: %d:%d:%d",timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
     return timeinfo;
 }
 
@@ -328,68 +322,6 @@ void print_car_left(Car* c) {
 }
 
 /**
-* Gets key from user.
-* Note: Reused from project 1.
-* @return - The key pressed by the user.
-*/
-char getkey() {
-    char key = 0;
-    int fD = 0; //fD is the file descriptor. 0 for keyboard input.
-    int nfds = 1; //number of file descriptors. 1 since we are only worried about keyboard input.
-    fd_set fs; //declare a fd_set named fs
-
-    FD_ZERO(&fs);
-    FD_SET(fD, &fs);
-
-    struct timeval time;
-    time.tv_sec = 0;
-    time.tv_usec = 0;
-
-    //int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout);
-    int numberOfKeysReady = select(nfds, &fs, NULL, NULL, &time); //Look up man pages for select(2)
-
-    //if numberOfKeysReady == 1 read from the file descriptor
-    // use read sys call to get the key pressed
-    if (numberOfKeysReady > 0)
-    {
-        //ssize_t read(int fd, void *buf, size_t count);
-        read(fD, &key, 1);
-    }
-    return key; //value of key is the decimal value of the character. See ascii table.
-}
-
-//void let_car_pass(struct car_queue* queue) {
-//    struct car_queue current_car_queue = *queue;
-//    do {
-//        down(sems.nb_empty);
-//        down(sems.sem_mutex);
-//        Car* dequed_car = dequeue(&current_car_queue);
-//        let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
-//        print_car_left(dequed_car);
-//        //gotta check to see if other queue is full. If it is we have to switch sides and consume from the other side
-//        if (*current_direction == NORTH) {
-//            if (is_full(south_bound)) {
-//                //If the opposite side is full we have to change current_direction to let cars from other side go.
-//                *current_direction = SOUTH;
-//            }
-//        } else { //current_direction == South
-//            if (is_full(north_bound)) {
-//                //If the opposite side is full we have to change current_direction to let cars from other side go.
-//                *current_direction = NORTH;
-//            }
-//        }
-//
-//        //Change the current_car_queue to dequeue from the current_direction.
-//        if (*current_direction == NORTH) {
-//            current_car_queue = *north_bound;
-//        } else {
-//            current_car_queue = *south_bound;
-//        }
-//    }
-//    while (!is_empty(&current_car_queue));
-//}
-
-/**
  * Adds cars to a given queue. If the queue is empty and flag_person is asleep the car will wake up the flag_person
  * by honking their horn.
  * @param queue
@@ -434,9 +366,7 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
 }
 
 int main(int argc, char **argv) {
-    srand(1); //TODO: Change to NULL after done debugging
-    char key = getkey();
-
+    srand(time(NULL)); //TODO: Change to constant for debugging
     //Start by initializing the simulation.
     init_sim();
 
@@ -444,49 +374,54 @@ int main(int argc, char **argv) {
     int current_process = fork();
 
     if (current_process == 0) { //child process
-        printf("About to execute northbound producer code\n");
         //Northbound producer
-        while(key != 'q') {
-            printf("N - car_arrives() called line 426\n");
-            int retval = car_arrives(north_bound, NORTH, sems.nb_full, sems.nb_empty);  //car arrives in northbound queue.
-            printf("   retVal = %d\n", retval);
-            key = getkey();
+        while(1) {
+            car_arrives(north_bound, NORTH, sems.nb_full, sems.nb_empty);  //car arrives in northbound queue.
         }
     } else if (current_process > 0) { //parent process.
         int pid = fork(); //fork again from parent process to create a third process.
         if(pid == 0) { //child2 process.
             //Southbound producer
-            printf("About to execute southbound producer code\n");
-            while(key != 'q') {
-                printf("S - car_arrives() called line 439\n");
-                int retval = car_arrives(south_bound, SOUTH, sems.sb_full, sems.sb_empty);//car arrives in southbound queue.
-                printf("   retVal = %d\n", retval);
-                key = getkey();
+            while(1) {
+                car_arrives(south_bound, SOUTH, sems.sb_full, sems.sb_empty);//car arrives in southbound queue.
             }
 
         } else if (pid > 0) { //parent process.
             //Flag Person
             // allow cars to travel (consume)
-            printf("About to execute flag_person consumer code\n");
-            while(key != 'q'){
-                if (*current_direction == NORTH) {
+            int awake = 0;
+            while(1){
+                down(sems.sem_mutex);
+                if (is_empty(north_bound) && is_empty(south_bound)) {
+                    if (awake == 1) {
+                        awake = 0;
+                        printf("The flag person is now asleep\n");
+                    }
+                } else if (*current_direction == NORTH) {
                     down(sems.nb_full);
-                    down(sems.sem_mutex);
-                        //Consume from north queue.
-                        Car* dequed_car = dequeue(north_bound);
-                        let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
-                        print_car_left(dequed_car);
+                    if (awake == 0) {
+                        awake = 1;
+                        printf("The flag person is now awake\n");
+                    }
+//                    down(sems.sem_mutex);
+                    //Consume from north queue.
+                    Car* dequed_car = dequeue(north_bound);
+                    let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
+                    print_car_left(dequed_car);
                     //gotta check to see if other queue is full. If it is we have to switch sides and consume from the other side
                     if (is_full(south_bound) || is_empty(north_bound)) {
                         //If the opposite side is full we have to change current_direction to let cars from other side go.
                         *current_direction = SOUTH;
                     }
-
-                    up(sems.sem_mutex);
+//                    up(sems.sem_mutex);
                     up(sems.nb_empty);
                 } else if (*current_direction == SOUTH){
                     down(sems.sb_full);
-                    down(sems.sem_mutex);
+                    if (awake == 0) {
+                        awake = 1;
+                        printf("The flag person is now awake\n");
+                    }
+//                    down(sems.sem_mutex);
                         Car* dequed_car = dequeue(south_bound);
                         let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
                         print_car_left(dequed_car);
@@ -495,10 +430,10 @@ int main(int argc, char **argv) {
                         //If the opposite side is full we have to change current_direction to let cars from other side go.
                         *current_direction = NORTH;
                     }
-                    up(sems.sem_mutex);
+//                    up(sems.sem_mutex);
                     up(sems.sb_empty);
                 }
-                key = getkey();
+                up(sems.sem_mutex);
             }
         }
     }
