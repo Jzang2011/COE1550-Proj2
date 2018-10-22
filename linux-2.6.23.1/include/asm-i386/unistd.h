@@ -331,11 +331,11 @@
 #define __NR_eventfd		323
 #define __NR_fallocate		324
 #define __NR_cs1550_down	325 //added for cs1550 (does this number need to match value in syscall_table.S?)
-#define __NR_cs1550_up		326 //added for cs1550 
+#define __NR_cs1550_up		326 //added for cs1550
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 327 //changed from 325 to 327 due to added cs1550 syscalls 
+#define NR_syscalls 327 //changed from 325 to 327 due to added cs1550 syscalls
 
 #define __ARCH_WANT_IPC_PARSE_VERSION
 #define __ARCH_WANT_OLD_READDIR
