@@ -236,6 +236,7 @@ void init_sim() {
 */
 int chance_80(){
     int r = rand() % 10;
+    printf("value of r is %d\n", r);
     if (r < 8) {
         return 1;
     } else {
