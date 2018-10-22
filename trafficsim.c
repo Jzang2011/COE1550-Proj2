@@ -18,6 +18,9 @@
 #define CAR_QUEUE_SIZE 10
 #define NUM_SEMS 5
 
+/**
+ * Direction enum to make code cleaner for handling direction.
+ */
 typedef enum {
     NORTH,
     SOUTH
@@ -113,7 +116,9 @@ void init_queue(struct car_queue * queue) {
     queue->size = CAR_QUEUE_SIZE;
 }
 
-
+/**
+ * Structure of semaphores used to make allocating memory for them easier
+ */
 typedef struct {
     struct cs1550_sem* nb_full;
     struct cs1550_sem* nb_empty;
@@ -160,37 +165,19 @@ int calculate_mem_size() {
     N = N + sizeof(int);
     N = N + sizeof(Direction);
     N = N + (sizeof(struct cs1550_sem) * NUM_SEMS); //we have 5 semaphores
-//    printf("size of mapped mem is %d\n", N);
     return N;
 }
 
 void init_ptrs(void* ptr_to_mem) {
-//    printf("initializing pointers \n");
-//    int sizeOfSem = sizeof(struct cs1550_sem);
-//    printf("size of a cs1550_sem is %d\n", sizeOfSem);
-//    printf("size of a car_queue is %d\n", (int) sizeof(struct car_queue));
-//    printf("size of a direciton is %d\n", (int) sizeof(Direction));
-
-//    printf("MMAPed addr is %p\n", ptr_to_mem);
-//    printf("addr of last mmaped byte is %p\n", ptr_to_mem + 340);
     sems.sem_mutex = ptr_to_mem;
-//    printf("addr of a sem_mutex is %p\n", sems.sem_mutex);
     sems.nb_full = sems.sem_mutex + 1;
-//    printf("addr of a nb_full is %p\n", sems.nb_full);
     sems.sb_full = sems.nb_full + 1;
-//    printf("addr of a sb_full is %p\n", sems.sb_full);
     sems.nb_empty = sems.sb_full + 1;
-//    printf("addr of a nb_empty is %p\n", sems.nb_empty);
     sems.sb_empty = sems.nb_empty + 1;
-//    printf("addr of a sb_empty is %p\n", sems.sb_empty);
     car_id_count = (int*) (sems.sb_empty + 1);
-//    printf("addr of a car_id_count is %p\n", car_id_count);
     current_direction = (Direction*) (car_id_count + 1);
-//    printf("addr of a current_direction is is %p\n", current_direction);
     north_bound = (struct car_queue*)(current_direction + 1);
-//    printf("addr of a north_bound is %p\n", north_bound);
     south_bound = north_bound + 1;
-//    printf("addr of a south_bound is %p\n", south_bound);
 }
 
 /**
@@ -247,7 +234,6 @@ void delay_20_sec() {
 }
 
 void let_car_through() {
-    //Remove car from either Northbound or Southbound queues.
     //Each car takes 2 seconds to go through the construction area.
     //Sleep for 2 seconds to simulate this.
     sleep(2);
@@ -309,6 +295,10 @@ void print_car_honk(Car* c) {
             , c->car_id, direction, c->timeinfo->tm_hour, c->timeinfo->tm_min, c->timeinfo->tm_sec);
 }
 
+/**
+ * Prints the time the car left its queue.
+ * @param c - The car that left the queue.
+ */
 void print_car_left(Car* c) {
     get_car_time(c);
     char direction;
@@ -333,7 +323,7 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
         down(empty_sem);
         down(sems.sem_mutex);
         //Create a car
-        Car* car = malloc(sizeof(Car)); //quit doing this. handle in enqueue.
+        Car* car = malloc(sizeof(Car)); //this might cause issues?
         car->car_id = *car_id_count;
         car->dir = direction;
         *car_id_count = *car_id_count + 1; //increment car count so next car created has a new id.
@@ -342,20 +332,8 @@ int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem*
             print_car_honk(car); //Car honks to wake up flag person.
             *current_direction = direction;//Set current direction to the honking direction
         }
-        if(is_full(queue)){
-            //When the que becomes full set the current_direction to this direction
-            // so that the flag_person can start consuming from the full queue.
-            if (direction == NORTH) {
-                printf("NorthBound Queue is full (line 393)\n");
-            } else {
-                printf("SouthBound Queue is full (line 395)\n");
-            }
-
-            return 0;  //break out of loop (stop producing)
-        } else {
-            enqueue(queue, car);
-        }
-        print_car_arrived(car);
+        enqueue(queue, car); //add car to queue
+        print_car_arrived(car); //print the car arrived.
         up(sems.sem_mutex);
         up(full_sem);
     }
@@ -395,17 +373,15 @@ int main(int argc, char **argv) {
                 if (is_empty(north_bound) && is_empty(south_bound)) {
                     if (awake == 1) {
                         awake = 0;
-                        printf("The flag person is now asleep\n");
+                        printf("The flag person is now asleep\n"); // if both queues are empty flag person sleeps.
                     }
                 } else if (*current_direction == NORTH) {
                     down(sems.nb_full);
                     if (awake == 0) {
                         awake = 1;
-                        printf("The flag person is now awake\n");
+                        printf("The flag person is now awake\n"); //wake up flag person.
                     }
-//                    down(sems.sem_mutex);
-                    //Consume from north queue.
-                    Car* dequed_car = dequeue(north_bound);
+                    Car* dequed_car = dequeue(north_bound); //Consume from north queue.
                     let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
                     print_car_left(dequed_car);
                     //gotta check to see if other queue is full. If it is we have to switch sides and consume from the other side
@@ -413,16 +389,14 @@ int main(int argc, char **argv) {
                         //If the opposite side is full we have to change current_direction to let cars from other side go.
                         *current_direction = SOUTH;
                     }
-//                    up(sems.sem_mutex);
                     up(sems.nb_empty);
                 } else if (*current_direction == SOUTH){
                     down(sems.sb_full);
                     if (awake == 0) {
                         awake = 1;
-                        printf("The flag person is now awake\n");
+                        printf("The flag person is now awake\n"); //wake up flag person.
                     }
-//                    down(sems.sem_mutex);
-                        Car* dequed_car = dequeue(south_bound);
+                        Car* dequed_car = dequeue(south_bound); //consume car from south_bound queue
                         let_car_through(); //sleeps for 2 seconds while care passes through construction zone.
                         print_car_left(dequed_car);
                         //gotta check to see if other queue is full. If it is we have to switch sides and consume from the other side
@@ -430,7 +404,6 @@ int main(int argc, char **argv) {
                         //If the opposite side is full we have to change current_direction to let cars from other side go.
                         *current_direction = NORTH;
                     }
-//                    up(sems.sem_mutex);
                     up(sems.sb_empty);
                 }
                 up(sems.sem_mutex);
