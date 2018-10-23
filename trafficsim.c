@@ -56,7 +56,7 @@ struct cs1550_sem {
 };
 
 /**
- * Checks to see if the process queue is full.
+ * Checks to see if the car_queue is full.
  * @param queue - the queue to be checked.
  * @return - 1 if the queue is full and 0 otherwise.
  */
@@ -91,7 +91,7 @@ void enqueue(struct car_queue *queue, struct Car* item) {
 }
 
 /**
- * Dequeues from a car queue.
+ * Dequeues from a car_queue.
  * @param queue - queue to be dequeued from
  * @return a void* to the item or 0 if the queue is empty.
  */
@@ -120,21 +120,28 @@ void init_queue(struct car_queue * queue) {
  * Structure of semaphores used to make allocating memory for them easier
  */
 typedef struct {
+    //semaphores for northbound queue.
     struct cs1550_sem* nb_full;
     struct cs1550_sem* nb_empty;
 
+    //semaphores for southbound queue.
     struct cs1550_sem* sb_full;
     struct cs1550_sem* sb_empty;
 
+    //mutex for mutual exclusion.
     struct cs1550_sem* sem_mutex;
 
 } my_sems;
 
 my_sems sems;
 
+//Shared variable to assign unique values to cars.
 int* car_id_count;
+
+//Shared variable to tell the flag person which way to consume from.
 Direction* current_direction;
 
+//queues for each direction
 struct car_queue* north_bound;
 struct car_queue* south_bound;
 
@@ -162,8 +169,8 @@ int calculate_mem_size() {
     int N = 0;
     N = N + sizeof(struct car_queue); //Size of one queue
     N = N + sizeof(struct car_queue); //Size of another queue
-    N = N + sizeof(int);
-    N = N + sizeof(Direction);
+    N = N + sizeof(int); //for car_id_count
+    N = N + sizeof(Direction); //for direction shared variable
     N = N + (sizeof(struct cs1550_sem) * NUM_SEMS); //we have 5 semaphores
     return N;
 }
@@ -191,8 +198,10 @@ void init_sim() {
     void* ptr = mmap(NULL, N, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, 0, 0);
     init_ptrs(ptr); //initializes the global pointers.
     //Initialize values in sems.
+    // full semaphores initialized to zero. initially there are no cars in the queues
     sems.sb_full->value = 0;
     sems.nb_full->value = 0;
+    // empty semaphores initialized to max size of a queue since all entries in a queue are initially empty.
     sems.sb_empty->value = CAR_QUEUE_SIZE;
     sems.nb_empty->value = CAR_QUEUE_SIZE;
     sems.sem_mutex->value = 1;
@@ -320,63 +329,62 @@ void print_car_left(Car* c) {
 int car_arrives(struct car_queue* queue, Direction direction, struct cs1550_sem* full_sem, struct cs1550_sem* empty_sem) {
     //produces cars each car created has an 80% chance of a car being behind it.
     do {
-        down(empty_sem);
-        down(sems.sem_mutex);
+        down(empty_sem); //down the empty sem since adding a car will decrease the number of empty spaces.
+        down(sems.sem_mutex); //down the mutex lock for mutual exclusion
         //Create a car
-        Car* car = malloc(sizeof(Car)); //this might cause issues?
+        Car* car = malloc(sizeof(Car)); //this might cause issue
         car->car_id = *car_id_count;
         car->dir = direction;
-        *car_id_count = *car_id_count + 1; //increment car count so next car created has a new id.
+        *car_id_count = *car_id_count + 1; //increment car_id_count so next car created has a new id.
         if (is_empty(north_bound) && is_empty(south_bound)) { //check to see if queues are empty. Which means car about to be added will be the first car.
             //first car is arriving
             print_car_honk(car); //Car honks to wake up flag person.
-            *current_direction = direction;//Set current direction to the honking direction
+            *current_direction = direction;//Set current direction to the direction the honking car is at.
         }
         enqueue(queue, car); //add car to queue
         print_car_arrived(car); //print the car arrived.
-        up(sems.sem_mutex);
-        up(full_sem);
+        up(sems.sem_mutex); //unlocks critical section.
+        up(full_sem); //up the full sem since there is one more occupied spot in the specified queue.
     }
     while(chance_80());
-    //process needs to be be slept at this point. But how?
     delay_20_sec(); //once no car comes there is a 20 second delay before any new car will come.
     return 1;
 }
 
 int main(int argc, char **argv) {
-    srand(time(NULL)); //TODO: Change to constant for debugging
+    srand(time(NULL)); //Initialize the seed for the random number generator. Change to constant for debugging.
     //Start by initializing the simulation.
     init_sim();
 
     //Gets the current process ID. This dictates what code to run (producer or consumer)
-    int current_process = fork();
+    int current_process = fork(); //create a new process.
 
-    if (current_process == 0) { //child process
+    if (current_process == 0) { //child process for producer
         //Northbound producer
         while(1) {
             car_arrives(north_bound, NORTH, sems.nb_full, sems.nb_empty);  //car arrives in northbound queue.
         }
     } else if (current_process > 0) { //parent process.
         int pid = fork(); //fork again from parent process to create a third process.
-        if(pid == 0) { //child2 process.
+        if(pid == 0) { //child2 process. Will be another producer process.
             //Southbound producer
             while(1) {
                 car_arrives(south_bound, SOUTH, sems.sb_full, sems.sb_empty);//car arrives in southbound queue.
             }
 
-        } else if (pid > 0) { //parent process.
+        } else if (pid > 0) { //parent process. Will be consumer process.
             //Flag Person
             // allow cars to travel (consume)
-            int awake = 0;
+            int awake = 0; //used to tell flagger when to sleep and awaken.
             while(1){
-                down(sems.sem_mutex);
+                down(sems.sem_mutex); //down for mutual exclusion of critical section
                 if (is_empty(north_bound) && is_empty(south_bound)) {
                     if (awake == 1) {
                         awake = 0;
                         printf("The flag person is now asleep\n"); // if both queues are empty flag person sleeps.
                     }
                 } else if (*current_direction == NORTH) {
-                    down(sems.nb_full);
+                    down(sems.nb_full); //consuming from north_bound queue.
                     if (awake == 0) {
                         awake = 1;
                         printf("The flag person is now awake\n"); //wake up flag person.
@@ -391,7 +399,7 @@ int main(int argc, char **argv) {
                     }
                     up(sems.nb_empty);
                 } else if (*current_direction == SOUTH){
-                    down(sems.sb_full);
+                    down(sems.sb_full); //consuming from southbound queue. 
                     if (awake == 0) {
                         awake = 1;
                         printf("The flag person is now awake\n"); //wake up flag person.
